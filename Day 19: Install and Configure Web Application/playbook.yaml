@@ -70,5 +70,6 @@
         name: "{{ db_user }}"
         password: "{{ db_pass }}"
         priv: "{{ db_name }}.*:ALL"
+        host: "%"
         state: present
         login_unix_socket: /var/lib/mysql/mysql.sock
