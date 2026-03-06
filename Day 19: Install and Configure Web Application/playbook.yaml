@@ -2,6 +2,7 @@
 - name: Setup Apache and PHP on App Servers
   hosts: stapp01, stapp02, stapp03
   become: yes
+  serial: 1
 
   vars:
     # Requirement (b) specifies port 6200
