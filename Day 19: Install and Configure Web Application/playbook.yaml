@@ -6,7 +6,7 @@
 
   vars:
     # Requirement (b) specifies port 6200
-    apache_port: 8085
+    apache_port: 6100
     websites:
       - { name: "beta", src: "/home/thor/beta" }
       - { name: "apps", src: "/home/thor/apps" }
@@ -40,8 +40,8 @@
   become: yes
 
   vars:
-    db_name: kodekloud_db9
-    db_user: kodekloud_gem
+    db_name: kodekloud_db10
+    db_user: kodekloud_aim
     db_pass: dCV3szSGNA
 
   tasks:
