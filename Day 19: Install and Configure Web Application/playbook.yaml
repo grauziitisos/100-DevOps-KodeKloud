@@ -1,18 +1,23 @@
 ---
-- name: Setup Apache with two static websites
-  hosts: stapp01
+- name: Setup Apache and PHP on App Servers
+  hosts: stapp01, stapp02, stapp03
   become: yes
 
   vars:
-    apache_port: 6300
+    # Requirement (b) specifies port 6200
+    apache_port: 6200
     websites:
       - { name: "beta", src: "/home/thor/beta" }
       - { name: "apps", src: "/home/thor/apps" }
 
   tasks:
-    - name: Install Apache httpd
+    # Requirement (a): Install httpd, php and its dependencies
+    - name: Install httpd, php and dependencies
       yum:
-        name: httpd
+        name:
+          - httpd
+          - php
+          - php-mysqlnd
         state: present
 
     - name: Change Apache to listen on custom port {{ apache_port }}
@@ -21,7 +26,6 @@
         regexp: '^Listen '
         line: "Listen {{ apache_port }}"
         state: present
-        backrefs: yes
 
     - name: Create website directories under /var/www/html
       file:
@@ -46,3 +50,43 @@
         name: httpd
         state: started
         enabled: yes
+
+# NEW PLAY FOR DATABASE
+- name: Setup MariaDB on DB Server
+  hosts: stdb01
+  become: yes
+
+  vars:
+    db_name: kodekloud_db10
+    db_user: kodekloud_cap
+    db_pass: LQfKeWWxWD
+
+  tasks:
+    # Requirement (c): Install/Configure MariaDB server
+    - name: Install MariaDB server and Python MySQL library
+      yum:
+        name:
+          - mariadb-server
+          - python3-PyMySQL # Required for Ansible mysql modules
+        state: present
+
+    - name: Start and enable MariaDB service
+      service:
+        name: mariadb
+        state: started
+        enabled: yes
+
+    # Requirement (d): Create database and user with permissions
+    - name: Create the database
+      mysql_db:
+        name: "{{ db_name }}"
+        state: present
+        login_unix_socket: /var/lib/mysql/mysql.sock
+
+    - name: Create database user and grant permissions
+      mysql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_pass }}"
+        priv: "{{ db_name }}.*:ALL"
+        state: present
+        login_unix_socket: /var/lib/mysql/mysql.sock
