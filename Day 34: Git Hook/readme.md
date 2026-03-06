@@ -53,6 +53,10 @@ cd /usr/src/kodekloudrepos/blog
 git checkout master
 git merge --no-ff feature -m "Merge feature into master"
 
+## 5.1. configure user and email accordingly
+git config --global user.name natasha
+git config --global user.email natasha@ststor01.stratos.xfusioncorp.com
+
 # 6. Push master to the bare repository to trigger the hook
 git push origin master
 
