@@ -27,24 +27,6 @@
         line: "Listen {{ apache_port }}"
         state: present
 
-    - name: Create website directories under /var/www/html
-      file:
-        path: "/var/www/html/{{ item.name }}"
-        state: directory
-        owner: apache
-        group: apache
-        mode: '0755'
-      loop: "{{ websites }}"
-
-    - name: Copy website files from jump host to app server
-      copy:
-        src: "{{ item.src }}/"
-        dest: "/var/www/html/{{ item.name }}/"
-        owner: apache
-        group: apache
-        mode: '0644'
-      loop: "{{ websites }}"
-
     - name: Ensure Apache is started and enabled
       service:
         name: httpd
