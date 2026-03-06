@@ -11,6 +11,46 @@ This document describes the steps to install and configure **Nginx** with **PHP-
 sudo yum install -y nginx
 sudo yum install -y php-fpm php-cli php-mysqlnd
 ```
+####Validate if the installed php version is as per the requirements, if php is installed with the lower version, try enabling Remi and EPEL Repositories.
+
+🔹 Step 1: Enable Remi and EPEL Repositories
+sudo dnf install -y epel-release
+sudo dnf install -y https://rpms.remirepo.net/enterprise/remi-release-9.rpm
+
+🔹 Step 2: Reset and Enable PHP 8.1 Stream
+
+First, disable any existing PHP modules:
+
+sudo dnf module reset php -y
+
+
+Then enable PHP 8.1 stream:
+
+sudo dnf module enable php:remi-8.1 -y
+
+🔹 Step 3: Install PHP 8.1 and PHP-FPM
+sudo dnf install -y php php-fpm
+
+
+You can also install additional PHP modules if needed:
+
+sudo dnf install -y php-mysqlnd php-cli php-common php-opcache php-gd php-curl php-mbstring
+
+🔹 Step 4: Enable and Start PHP-FPM Service
+sudo systemctl enable --now php-fpm
+
+
+Check status:
+
+sudo systemctl status php-fpm
+
+🔹 Step 5: Verify PHP Version
+php -v
+
+
+✅ Expected output:
+
+PHP 8.1.x (cli) (built: ...)
 
 ### 2. Configure PHP-FPM
 Edit the pool configuration:
