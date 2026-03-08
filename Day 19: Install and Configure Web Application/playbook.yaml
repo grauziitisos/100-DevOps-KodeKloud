@@ -1,76 +1,42 @@
 ---
-- name: Setup Apache and PHP on App Servers
-  hosts: stapp01, stapp02, stapp03
+- name: Setup Apache on App Server 3
+  hosts: stapp03
   become: yes
-  serial: 1
 
   vars:
-    # Requirement (b) specifies port 6200
-    apache_port: 6100
+    # Requirement (b) specifies port 8083
+    apache_port: 8083
+    # Requirement (c) specifies official and demo websites
     websites:
-      - { name: "beta", src: "/home/thor/beta" }
-      - { name: "apps", src: "/home/thor/apps" }
+      - { name: "official", src: "/home/thor/official" }
+      - { name: "demo", src: "/home/thor/demo" }
 
   tasks:
-    # Requirement (a): Install httpd, php and its dependencies
-    - name: Install httpd, php and dependencies
+    # Requirement (a): Install httpd package and dependencies
+    - name: Install httpd package
       yum:
-        name:
-          - httpd
-          - php
-          - php-mysqlnd
+        name: httpd
         state: present
 
-    - name: Change Apache to listen on custom port {{ apache_port }}
+    # Requirement (b): Configure Apache to listen on port 8083
+    - name: Change Apache to listen on port {{ apache_port }}
       lineinfile:
         path: /etc/httpd/conf/httpd.conf
         regexp: '^Listen '
         line: "Listen {{ apache_port }}"
         state: present
 
+    # Requirement (c): Copy website files from jump host to app server
+    - name: Deploy website content
+      copy:
+        src: "{{ item.src }}"
+        dest: /var/www/html/
+        directory_mode: '0755'
+      loop: "{{ websites }}"
+
+    # Requirement (d): Ensure Apache is started and enabled so curl works
     - name: Ensure Apache is started and enabled
       service:
         name: httpd
         state: started
         enabled: yes
-
-# NEW PLAY FOR DATABASE
-- name: Setup MariaDB on DB Server
-  hosts: stdb01
-  become: yes
-
-  vars:
-    db_name: kodekloud_db10
-    db_user: kodekloud_aim
-    db_pass: dCV3szSGNA
-
-  tasks:
-    # Requirement (c): Install/Configure MariaDB server
-    - name: Install MariaDB server and Python MySQL library
-      yum:
-        name:
-          - mariadb-server
-          - python3-PyMySQL # Required for Ansible mysql modules
-        state: present
-
-    - name: Start and enable MariaDB service
-      service:
-        name: mariadb
-        state: started
-        enabled: yes
-
-    # Requirement (d): Create database and user with permissions
-    - name: Create the database
-      mysql_db:
-        name: "{{ db_name }}"
-        state: present
-        login_unix_socket: /var/lib/mysql/mysql.sock
-
-    - name: Create database user and grant permissions
-      mysql_user:
-        name: "{{ db_user }}"
-        password: "{{ db_pass }}"
-        priv: "{{ db_name }}.*:ALL"
-        host: "%"
-        state: present
-        login_unix_socket: /var/lib/mysql/mysql.sock
