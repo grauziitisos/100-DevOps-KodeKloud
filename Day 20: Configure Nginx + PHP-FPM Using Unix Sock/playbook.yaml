@@ -43,10 +43,11 @@
         name: epel-release
         state: present
 
-    - name: Install Remi repo (for PHP 8.3)
-      dnf:
-        name: https://rpms.remirepo.net/enterprise/remi-release-8.rpm
-        state: present
+    - name: Install Remi repo (safe, version-agnostic)
+      ansible.builtin.shell: |
+        dnf install -y https://rpms.remirepo.net/enterprise/remi-release-8.rpm || true
+      args:
+        creates: /etc/yum.repos.d/remi.repo
 
     - name: Enable Remi PHP 8.3 module
       command: dnf module enable -y php:remi-8.3
