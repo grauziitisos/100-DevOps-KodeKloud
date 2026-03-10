@@ -1,96 +1,107 @@
 ---
-- name: Configure App Server 2 with Nginx + PHP 8.3
+- name: Configure App Server 2 with Nginx + PHP-FPM 8.3
   hosts: stapp02
   become: yes
+  vars:
+    web_root: /var/www/html
+    php_socket: /var/run/php-fpm/default.sock
+    nginx_port: 8095
+
   tasks:
 
-    - name: Install Nginx
-      dnf:
-        name: nginx
-        state: present
+  - name: Ensure EPEL repository is installed
+    ansible.builtin.yum:
+      name: epel-release
+      state: present
 
-    - name: Ensure Nginx is enabled and running
-      systemd:
-        name: nginx
-        enabled: yes
-        state: started
+  - name: Install Remi repository for PHP 8.3
+    ansible.builtin.yum:
+      name: https://rpms.remirepo.net/enterprise/remi-release-8.rpm
+      state: present
 
-    - name: Create Nginx site config for port 8095
-      copy:
-        dest: /etc/nginx/conf.d/custom-site.conf
-        content: |
-          server {
-              listen 8095;
-              server_name _;
-              root /var/www/html;
+  - name: Enable Remi PHP 8.3 module
+    ansible.builtin.command:
+      cmd: dnf module reset php -y
+    register: reset_php_module
+    changed_when: reset_php_module.rc == 0
 
-              index index.php index.html;
-              location / {
-                  try_files $uri $uri/ =404;
-              }
+  - name: Enable Remi PHP 8.3 module
+    ansible.builtin.command:
+      cmd: dnf module enable php:remi-8.3 -y
+    register: enable_php_module
+    changed_when: enable_php_module.rc == 0
 
-              location ~ \.php$ {
-                  include fastcgi_params;
-                  fastcgi_pass unix:/var/run/php-fpm/default.sock;
-                  fastcgi_index index.php;
-                  fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-              }
-          }
-      notify: Reload Nginx
+  - name: Install Nginx and PHP-FPM
+    ansible.builtin.yum:
+      name:
+        - nginx
+        - php-fpm
+      state: present
 
-    - name: Install EPEL release (for Remi)
-      dnf:
-        name: epel-release
-        state: present
+  - name: Ensure PHP-FPM socket directory exists
+    ansible.builtin.file:
+      path: "{{ php_socket | dirname }}"
+      state: directory
+      owner: nginx
+      group: nginx
+      mode: '0755'
 
-    - name: Install Remi repo (safe, version-agnostic)
-      ansible.builtin.shell: |
-        dnf install -y https://rpms.remirepo.net/enterprise/remi-release-8.rpm || true
-      args:
-        creates: /etc/yum.repos.d/remi.repo
+  - name: Configure PHP-FPM to use custom socket
+    ansible.builtin.lineinfile:
+      path: /etc/php-fpm.d/www.conf
+      regexp: '^listen ='
+      line: "listen = {{ php_socket }}"
+      backrefs: yes
 
-    - name: Enable Remi PHP 8.3 module
-      command: dnf module enable -y php:remi-8.3
-      args:
-        creates: /etc/dnf/modules.d/php.module
+  - name: Ensure PHP-FPM service is started and enabled
+    ansible.builtin.service:
+      name: php-fpm
+      state: started
+      enabled: yes
 
-    - name: Install PHP 8.3 FPM
-      dnf:
-        name:
-          - php-fpm
-          - php-cli
-          - php-mbstring
-          - php-opcache
-        state: present
+  - name: Configure Nginx site for port 8095
+    ansible.builtin.copy:
+      dest: /etc/nginx/conf.d/custom_site.conf
+      content: |
+        server {
+            listen {{ nginx_port }};
+            server_name stapp02;
 
-    - name: Ensure PHP-FPM directories exist
-      file:
-        path: /var/run/php-fpm
-        state: directory
-        owner: apache
-        group: apache
-        mode: 0755
+            root {{ web_root }};
+            index index.php index.html;
 
-    - name: Configure PHP-FPM socket
-      lineinfile:
-        path: /etc/php-fpm.d/www.conf
-        regexp: '^listen ='
-        line: 'listen = /var/run/php-fpm/default.sock'
-      notify: Restart PHP-FPM
+            location / {
+                try_files $uri $uri/ =404;
+            }
 
-    - name: Ensure PHP-FPM is enabled and running
-      systemd:
-        name: php-fpm
-        enabled: yes
-        state: started
+            location ~ \.php$ {
+                include fastcgi_params;
+                fastcgi_pass unix:{{ php_socket }};
+                fastcgi_index index.php;
+                fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            }
+        }
 
-  handlers:
-    - name: Reload Nginx
-      systemd:
-        name: nginx
-        state: reloaded
+  - name: Ensure Nginx is started and enabled
+    ansible.builtin.service:
+      name: nginx
+      state: started
+      enabled: yes
 
-    - name: Restart PHP-FPM
-      systemd:
-        name: php-fpm
-        state: restarted
+  - name: Ensure firewalld Python bindings are installed
+    ansible.builtin.yum:
+      name: python3-firewall
+      state: present
+
+  - name: Ensure firewalld service is running
+    ansible.builtin.service:
+      name: firewalld
+      state: started
+      enabled: yes
+
+  - name: Open port 8095 in the firewall
+    community.general.firewalld:
+      port: "{{ nginx_port }}/tcp"
+      permanent: yes
+      state: enabled
+      immediate: yes
