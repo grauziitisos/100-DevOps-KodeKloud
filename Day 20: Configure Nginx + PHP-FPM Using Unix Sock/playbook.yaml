@@ -1,22 +1,102 @@
-- name: Install PHP-FPM 8.3 and Nginx without Remi
+---
+- name: Configure App Server 2 with Nginx + PHP 8.3
   hosts: stapp02
   become: yes
   tasks:
 
-    - name: Enable PHP 8.3 module (dnf)
-      ansible.builtin.command: dnf module enable php:8.3 -y
-      args:
-        creates: /etc/alternatives/php
-
-    - name: Install nginx
-      ansible.builtin.yum:
+    - name: Install Nginx
+      dnf:
         name: nginx
         state: present
 
-    - name: Install PHP-FPM 8.3 and CLI
-      ansible.builtin.yum:
-        name:
-          - php
-          - php-cli
-          - php-fpm
+    - name: Ensure Nginx is enabled and running
+      systemd:
+        name: nginx
+        enabled: yes
+        state: started
+
+    - name: Create Nginx site config for port 8095
+      copy:
+        dest: /etc/nginx/conf.d/custom-site.conf
+        content: |
+          server {
+              listen 8095;
+              server_name _;
+              root /var/www/html;
+
+              index index.php index.html;
+              location / {
+                  try_files $uri $uri/ =404;
+              }
+
+              location ~ \.php$ {
+                  include fastcgi_params;
+                  fastcgi_pass unix:/var/run/php-fpm/default.sock;
+                  fastcgi_index index.php;
+                  fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+              }
+          }
+      notify: Reload Nginx
+
+    - name: Install EPEL release (for Remi)
+      dnf:
+        name: epel-release
         state: present
+
+    - name: Install Remi repo (for PHP 8.3)
+      dnf:
+        name: https://rpms.remirepo.net/enterprise/remi-release-8.rpm
+        state: present
+
+    - name: Enable Remi PHP 8.3 module
+      command: dnf module enable -y php:remi-8.3
+      args:
+        creates: /etc/dnf/modules.d/php.module
+
+    - name: Install PHP 8.3 FPM
+      dnf:
+        name:
+          - php-fpm
+          - php-cli
+          - php-mbstring
+          - php-opcache
+        state: present
+
+    - name: Ensure PHP-FPM directories exist
+      file:
+        path: /var/run/php-fpm
+        state: directory
+        owner: apache
+        group: apache
+        mode: 0755
+
+    - name: Configure PHP-FPM socket
+      lineinfile:
+        path: /etc/php-fpm.d/www.conf
+        regexp: '^listen ='
+        line: 'listen = /var/run/php-fpm/default.sock'
+      notify: Restart PHP-FPM
+
+    - name: Ensure PHP-FPM is enabled and running
+      systemd:
+        name: php-fpm
+        enabled: yes
+        state: started
+
+    - name: Ensure firewall allows 8095
+      firewalld:
+        port: 8095/tcp
+        permanent: yes
+        state: enabled
+        immediate: yes
+
+  handlers:
+    - name: Reload Nginx
+      systemd:
+        name: nginx
+        state: reloaded
+
+    - name: Restart PHP-FPM
+      systemd:
+        name: php-fpm
+        state: restarted
