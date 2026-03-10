@@ -84,13 +84,6 @@
         enabled: yes
         state: started
 
-    - name: Ensure firewall allows 8095
-      firewalld:
-        port: 8095/tcp
-        permanent: yes
-        state: enabled
-        immediate: yes
-
   handlers:
     - name: Reload Nginx
       systemd:
