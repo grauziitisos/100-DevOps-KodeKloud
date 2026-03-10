@@ -1,44 +1,69 @@
 ---
-- name: Configure App Server 2 with Nginx + PHP-FPM 8.3
+- name: Configure App Server 2
   hosts: stapp02
-  become: yes
+  become: true
   vars:
-    web_root: /var/www/html
-    php_socket: /var/run/php-fpm/default.sock
     nginx_port: 8095
+    document_root: /var/www/html
+    php_socket: /var/run/php-fpm/default.sock
 
   tasks:
 
-  - name: Ensure EPEL repository is installed
+  - name: Install Nginx
     ansible.builtin.yum:
-      name: epel-release
+      name: nginx
       state: present
 
-  - name: Install Remi repository for PHP 8.3
+  - name: Ensure Nginx service is enabled and started
+    ansible.builtin.service:
+      name: nginx
+      state: started
+      enabled: true
+
+  - name: Create document root
+    ansible.builtin.file:
+      path: "{{ document_root }}"
+      state: directory
+      owner: nginx
+      group: nginx
+      mode: '0755'
+
+  - name: Configure Nginx site for port 8095
+    ansible.builtin.copy:
+      dest: /etc/nginx/conf.d/custom_site.conf
+      content: |
+        server {
+            listen {{ nginx_port }};
+            server_name localhost;
+
+            root {{ document_root }};
+            index index.php index.html index.htm;
+
+            location ~ \.php$ {
+                include fastcgi_params;
+                fastcgi_pass unix:{{ php_socket }};
+                fastcgi_index index.php;
+                fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            }
+        }
+
+  - name: Reload Nginx to apply configuration
+    ansible.builtin.service:
+      name: nginx
+      state: reloaded
+
+  - name: Install PHP-FPM 8.3
     ansible.builtin.yum:
-      name: https://rpms.remirepo.net/enterprise/remi-release-8.rpm
+      name: php-fpm
       state: present
 
-  - name: Enable Remi PHP 8.3 module
-    ansible.builtin.command:
-      cmd: dnf module reset php -y
-    register: reset_php_module
-    changed_when: reset_php_module.rc == 0
+  - name: Ensure PHP-FPM service is enabled and started
+    ansible.builtin.service:
+      name: php-fpm
+      state: started
+      enabled: true
 
-  - name: Enable Remi PHP 8.3 module
-    ansible.builtin.command:
-      cmd: dnf module enable php:remi-8.3 -y
-    register: enable_php_module
-    changed_when: enable_php_module.rc == 0
-
-  - name: Install Nginx and PHP-FPM
-    ansible.builtin.yum:
-      name:
-        - nginx
-        - php-fpm
-      state: present
-
-  - name: Ensure PHP-FPM socket directory exists
+  - name: Create PHP-FPM socket directory
     ansible.builtin.file:
       path: "{{ php_socket | dirname }}"
       state: directory
@@ -53,55 +78,7 @@
       line: "listen = {{ php_socket }}"
       backrefs: yes
 
-  - name: Ensure PHP-FPM service is started and enabled
+  - name: Reload PHP-FPM
     ansible.builtin.service:
       name: php-fpm
-      state: started
-      enabled: yes
-
-  - name: Configure Nginx site for port 8095
-    ansible.builtin.copy:
-      dest: /etc/nginx/conf.d/custom_site.conf
-      content: |
-        server {
-            listen {{ nginx_port }};
-            server_name stapp02;
-
-            root {{ web_root }};
-            index index.php index.html;
-
-            location / {
-                try_files $uri $uri/ =404;
-            }
-
-            location ~ \.php$ {
-                include fastcgi_params;
-                fastcgi_pass unix:{{ php_socket }};
-                fastcgi_index index.php;
-                fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-            }
-        }
-
-  - name: Ensure Nginx is started and enabled
-    ansible.builtin.service:
-      name: nginx
-      state: started
-      enabled: yes
-
-  - name: Ensure firewalld Python bindings are installed
-    ansible.builtin.yum:
-      name: python3-firewall
-      state: present
-
-  - name: Ensure firewalld service is running
-    ansible.builtin.service:
-      name: firewalld
-      state: started
-      enabled: yes
-
-  - name: Open port 8095 in the firewall
-    community.general.firewalld:
-      port: "{{ nginx_port }}/tcp"
-      permanent: yes
-      state: enabled
-      immediate: yes
+      state: restarted
