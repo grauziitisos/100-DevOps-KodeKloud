@@ -82,3 +82,15 @@
     ansible.builtin.service:
       name: php-fpm
       state: restarted
+
+- name: Verify website from jump host
+  hosts: stapp01
+  gather_facts: false
+  tasks:
+    - name: Test Nginx + PHP-FPM
+      shell: "curl -s -o /dev/null -w '%{http_code}' http://stapp02:8095/index.php"
+      register: result
+
+    - name: Show test result
+      debug:
+        msg: "HTTP status code from stapp02:8095/index.php => {{ result.stdout }}"
