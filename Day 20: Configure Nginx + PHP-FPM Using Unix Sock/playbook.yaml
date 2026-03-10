@@ -1,24 +1,10 @@
----
-- name: Configure App Server 2 with Nginx + PHP-FPM 8.3
+- name: Install PHP-FPM 8.3 and Nginx without Remi
   hosts: stapp02
   become: yes
-  vars:
-    php_fpm_version: "8.3"
-    php_fpm_socket: "/var/run/php-fpm/default.sock"
-    document_root: "/var/www/html"
-    nginx_port: 8095
-
   tasks:
 
-    - name: Ensure EPEL & Remi repo is available (for PHP 8.3)
-      ansible.builtin.yum:
-        name:
-          - epel-release
-          - https://rpms.remirepo.net/enterprise/remi-release-8.rpm
-        state: present
-
-    - name: Enable Remi PHP 8.3 module
-      ansible.builtin.command: dnf module enable php:remi-8.3 -y
+    - name: Enable PHP 8.3 module (dnf)
+      ansible.builtin.command: dnf module enable php:8.3 -y
       args:
         creates: /etc/alternatives/php
 
@@ -27,85 +13,10 @@
         name: nginx
         state: present
 
-    - name: Install PHP-FPM 8.3 and common packages
+    - name: Install PHP-FPM 8.3 and CLI
       ansible.builtin.yum:
         name:
           - php
           - php-cli
           - php-fpm
         state: present
-
-    - name: Ensure PHP-FPM parent directories exist
-      ansible.builtin.file:
-        path: "{{ php_fpm_socket | dirname }}"
-        state: directory
-        owner: apache
-        group: apache
-        mode: "0755"
-
-    - name: Configure PHP-FPM pool to use custom socket
-      ansible.builtin.copy:
-        dest: "/etc/php-fpm.d/www.conf"
-        content: |
-          [www]
-          user = apache
-          group = apache
-          listen = {{ php_fpm_socket }}
-          listen.owner = apache
-          listen.group = apache
-          pm = dynamic
-          pm.max_children = 50
-          pm.start_servers = 5
-          pm.min_spare_servers = 5
-          pm.max_spare_servers = 35
-          chdir = /
-      notify:
-        - Restart php-fpm
-
-    - name: Configure nginx for PHP-FPM
-      ansible.builtin.copy:
-        dest: /etc/nginx/conf.d/phpapp.conf
-        content: |
-          server {
-              listen {{ nginx_port }};
-              server_name stapp02;
-
-              root {{ document_root }};
-              index index.php index.html;
-
-              location / {
-                  try_files $uri $uri/ =404;
-              }
-
-              location ~ \.php$ {
-                  include fastcgi_params;
-                  fastcgi_pass unix:{{ php_fpm_socket }};
-                  fastcgi_index index.php;
-                  fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-              }
-          }
-      notify:
-        - Reload nginx
-
-    - name: Ensure nginx is enabled and running
-      ansible.builtin.service:
-        name: nginx
-        state: started
-        enabled: yes
-
-    - name: Ensure PHP-FPM is enabled and running
-      ansible.builtin.service:
-        name: php-fpm
-        state: started
-        enabled: yes
-
-  handlers:
-    - name: Reload nginx
-      ansible.builtin.service:
-        name: nginx
-        state: reloaded
-
-    - name: Restart php-fpm
-      ansible.builtin.service:
-        name: php-fpm
-        state: restarted
