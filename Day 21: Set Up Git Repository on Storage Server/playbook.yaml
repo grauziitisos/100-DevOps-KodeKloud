@@ -16,8 +16,8 @@
     ansible.builtin.file:
       path: "{{ repo_root }}"
       state: directory
-      owner: natasha
-      group: natasha
+      owner: root
+      group: root
       mode: '0755'
 
 #  - name: Initialize bare git repository
@@ -32,4 +32,4 @@
     ansible.builtin.command:
       cmd: git init --bare {{ repo_root }}
       creates: "{{ repo_root }}/HEAD" 
-    become_user: natasha
+    become_user: root
