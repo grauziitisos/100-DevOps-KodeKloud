@@ -20,11 +20,16 @@
       group: natasha
       mode: '0755'
 
-  - name: Initialize bare git repository
-    ansible.builtin.git:
-      repo: "file://{{ repo_root }}"
-      dest: "{{ repo_root }}"
-      bare: yes
-      clone: no
-      update: no
+#  - name: Initialize bare git repository
+#    ansible.builtin.git:
+#      repo: "file://{{ repo_root }}"
+#      dest: "{{ repo_root }}"
+#      bare: yes
+#      clone: no
+#      update: no
 
+  - name: Initialize bare git repository
+    ansible.builtin.command:
+      cmd: git init --bare {{ repo_root }}
+      creates: "{{ repo_root }}/HEAD" 
+    become_user: natasha
