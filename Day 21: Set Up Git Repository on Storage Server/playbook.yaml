@@ -1,0 +1,30 @@
+---
+- name: Configure Storage Server
+  hosts: ststor01
+  become: true
+  vars:
+    repo_root: /opt/ecommerce.git
+
+  tasks:
+
+  - name: Install Git
+    ansible.builtin.yum:
+      name: git
+      state: present
+
+  - name: Create repo root
+    ansible.builtin.file:
+      path: "{{ repo_root }}"
+      state: directory
+      owner: natasha
+      group: natasha
+      mode: '0755'
+
+  - name: Initialize bare git repository
+    ansible.builtin.git:
+      repo: "file://{{ repo_root }}"
+      dest: "{{ repo_root }}"
+      bare: yes
+      clone: no
+      update: no
+
